@@ -1,16 +1,48 @@
+import { db } from '../db';
+import { servicesTable } from '../db/schema';
 import { type Service } from '../schema';
+import { eq } from 'drizzle-orm';
 
 export async function getServices(activeOnly: boolean = false): Promise<Service[]> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching available services from the database.
-    // If activeOnly is true, it should only return services where is_active = true.
-    // This is used in the transaction creation interface to show available services.
-    return Promise.resolve([]);
+  try {
+    const results = activeOnly
+      ? await db.select()
+          .from(servicesTable)
+          .where(eq(servicesTable.is_active, true))
+          .execute()
+      : await db.select()
+          .from(servicesTable)
+          .execute();
+
+    // Convert numeric fields back to numbers
+    return results.map(service => ({
+      ...service,
+      price: parseFloat(service.price)
+    }));
+  } catch (error) {
+    console.error('Get services failed:', error);
+    throw error;
+  }
 }
 
 export async function getServiceById(id: number): Promise<Service | null> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching a specific service by its ID.
-    // It should return null if the service is not found.
-    return Promise.resolve(null);
+  try {
+    const results = await db.select()
+      .from(servicesTable)
+      .where(eq(servicesTable.id, id))
+      .execute();
+
+    if (results.length === 0) {
+      return null;
+    }
+
+    const service = results[0];
+    return {
+      ...service,
+      price: parseFloat(service.price)
+    };
+  } catch (error) {
+    console.error('Get service by ID failed:', error);
+    throw error;
+  }
 }

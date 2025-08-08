@@ -1,49 +1,121 @@
+import { db } from '../db';
+import { patientVisitsTable, patientsTable, transactionsTable } from '../db/schema';
 import { type CreatePatientVisitInput, type PatientVisit } from '../schema';
+import { eq, desc } from 'drizzle-orm';
 
 export async function createPatientVisit(input: CreatePatientVisitInput): Promise<PatientVisit> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is recording a patient's visit with medical details.
-    // It should create a visit record with diagnosis, treatment, and notes.
-    // This is typically called automatically when a medical transaction is created.
-    return Promise.resolve({
-        id: 0, // Placeholder ID
+  try {
+    // Verify patient exists
+    const patient = await db.select()
+      .from(patientsTable)
+      .where(eq(patientsTable.id, input.patient_id))
+      .execute();
+
+    if (patient.length === 0) {
+      throw new Error(`Patient with ID ${input.patient_id} not found`);
+    }
+
+    // Verify transaction exists if provided
+    if (input.transaction_id) {
+      const transaction = await db.select()
+        .from(transactionsTable)
+        .where(eq(transactionsTable.id, input.transaction_id))
+        .execute();
+
+      if (transaction.length === 0) {
+        throw new Error(`Transaction with ID ${input.transaction_id} not found`);
+      }
+    }
+
+    // Create patient visit record
+    const result = await db.insert(patientVisitsTable)
+      .values({
         patient_id: input.patient_id,
-        transaction_id: input.transaction_id || null,
+        transaction_id: input.transaction_id,
         visit_date: input.visit_date,
-        diagnosis: input.diagnosis || null,
-        treatment: input.treatment || null,
-        notes: input.notes || null,
-        created_at: new Date()
-    } as PatientVisit);
+        diagnosis: input.diagnosis,
+        treatment: input.treatment,
+        notes: input.notes
+      })
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Patient visit creation failed:', error);
+    throw error;
+  }
 }
 
 export async function getPatientVisits(patientId: number): Promise<PatientVisit[]> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching all visits for a specific patient.
-    // Results should be ordered by visit date (newest first).
-    // This is used for displaying patient history and medical records.
-    return Promise.resolve([]);
+  try {
+    // Verify patient exists
+    const patient = await db.select()
+      .from(patientsTable)
+      .where(eq(patientsTable.id, patientId))
+      .execute();
+
+    if (patient.length === 0) {
+      throw new Error(`Patient with ID ${patientId} not found`);
+    }
+
+    // Fetch patient visits ordered by visit date (newest first)
+    const visits = await db.select()
+      .from(patientVisitsTable)
+      .where(eq(patientVisitsTable.patient_id, patientId))
+      .orderBy(desc(patientVisitsTable.visit_date))
+      .execute();
+
+    return visits;
+  } catch (error) {
+    console.error('Failed to fetch patient visits:', error);
+    throw error;
+  }
 }
 
 export async function getVisitById(id: number): Promise<PatientVisit | null> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is fetching a specific visit by its ID.
-    // It should include related patient and transaction information.
-    return Promise.resolve(null);
+  try {
+    const visits = await db.select()
+      .from(patientVisitsTable)
+      .where(eq(patientVisitsTable.id, id))
+      .execute();
+
+    return visits.length > 0 ? visits[0] : null;
+  } catch (error) {
+    console.error('Failed to fetch visit by ID:', error);
+    throw error;
+  }
 }
 
-export async function updatePatientVisit(id: number, diagnosis?: string, treatment?: string, notes?: string): Promise<PatientVisit> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating visit details after the initial creation.
-    // This allows medical staff to add or modify diagnosis and treatment information.
-    return Promise.resolve({
-        id: id,
-        patient_id: 0,
-        transaction_id: null,
-        visit_date: new Date(),
-        diagnosis: diagnosis || null,
-        treatment: treatment || null,
-        notes: notes || null,
-        created_at: new Date()
-    } as PatientVisit);
+export async function updatePatientVisit(id: number, diagnosis?: string | null, treatment?: string | null, notes?: string | null): Promise<PatientVisit> {
+  try {
+    // Check if visit exists
+    const existingVisit = await getVisitById(id);
+    if (!existingVisit) {
+      throw new Error(`Patient visit with ID ${id} not found`);
+    }
+
+    // Build update object with only provided fields
+    const updateData: any = {};
+    if (diagnosis !== undefined) updateData.diagnosis = diagnosis;
+    if (treatment !== undefined) updateData.treatment = treatment;
+    if (notes !== undefined) updateData.notes = notes;
+
+    // If no fields to update, return existing visit
+    if (Object.keys(updateData).length === 0) {
+      return existingVisit;
+    }
+
+    // Update patient visit record
+    const result = await db.update(patientVisitsTable)
+      .set(updateData)
+      .where(eq(patientVisitsTable.id, id))
+      .returning()
+      .execute();
+
+    return result[0];
+  } catch (error) {
+    console.error('Patient visit update failed:', error);
+    throw error;
+  }
 }
